@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # EcoLoop Marketplace 🌿🔄
 
 **EcoLoop Marketplace** is a circular economy matchmaking platform connecting surplus/waste generators (restaurants, breweries, factories, machine shops) with reuse businesses (compost facilities, anaerobic digesters, plastics and metal recyclers) and agricultural buyers purchasing finished compost and biochar ("A dating app for industrial and food waste").
@@ -75,4 +75,4 @@ node src/tests/ecoloop.test.js
 =======
 # Ecoloop
 An AI-powered marketplace that matches waste generators with businesses that can reuse their surplus material, cutting landfill, logistics costs, and carbon emissions.
->>>>>>> 815a1b70ccd34458be93e24662fcb433da979286
+
