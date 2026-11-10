@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import SwipeMatchDeck from './components/SwipeMatchDeck';
 import MarketplaceList from './components/MarketplaceList';
@@ -8,14 +8,21 @@ import CircularFlowMap from './components/CircularFlowMap';
 import QuickRestaurantListingModal from './components/QuickRestaurantListingModal';
 import DetailedIndustrialListingModal from './components/DetailedIndustrialListingModal';
 import ReviewModal from './components/ReviewModal';
-import { StorageService } from './services/storageService';
+import AuthModal from './components/AuthModal';
+import { api } from './services/api';
 
 export default function App() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [listings, setListings] = useState([]);
+  const [skippedIds, setSkippedIds] = useState([]);
   const [matches, setMatches] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorBanner, setErrorBanner] = useState('');
+
   const [activeTab, setActiveTab] = useState('swipe'); // 'swipe' | 'explore' | 'matches' | 'dashboard' | 'map'
   const [activeMatchId, setActiveMatchId] = useState(null);
 
@@ -23,113 +30,212 @@ export default function App() {
   const [isQuickRestaurantOpen, setIsQuickRestaurantOpen] = useState(false);
   const [isIndustrialOpen, setIsIndustrialOpen] = useState(false);
   const [reviewMatchTarget, setReviewMatchTarget] = useState(null);
+  const [authModalState, setAuthModalState] = useState({ open: false, message: '', onComplete: null });
 
-  // Initialize data from local storage service
-  useEffect(() => {
-    loadAllData();
+  const refreshAll = useCallback(async () => {
+    try {
+      const [meRes, usersRes, listingsRes, matchesRes, reviewsRes, analyticsRes, routesRes] =
+        await Promise.all([
+          api.getMe(),
+          api.getUsers(),
+          api.getListings(),
+          api.getMatches(),
+          api.getReviews(),
+          api.getAnalytics(),
+          api.getRoutes()
+        ]);
+
+      setCurrentUser(meRes.user);
+      setUsers(usersRes.users || []);
+      setListings(listingsRes.listings || []);
+      setSkippedIds(listingsRes.skippedIds || []);
+      setMatches(matchesRes.matches || []);
+      setReviews(reviewsRes.reviews || []);
+      setAnalytics(analyticsRes.analytics || null);
+      setRoutes(routesRes.routes || []);
+      setErrorBanner('');
+
+      if ((matchesRes.matches || []).length > 0) {
+        setActiveMatchId((prev) => prev || matchesRes.matches[0].id);
+      }
+    } catch (err) {
+      setErrorBanner(err.message || 'Unable to reach backend database.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadAllData = () => {
-    const loadedUsers = StorageService.getUsers();
-    const loadedCurrent = StorageService.getCurrentUser();
-    const loadedListings = StorageService.getListings();
-    const loadedMatches = StorageService.getMatches();
-    const loadedReviews = StorageService.getReviews();
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) {
+        await refreshAll();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshAll]);
 
-    setUsers(loadedUsers);
-    setCurrentUser(loadedCurrent);
-    setListings(loadedListings);
-    setMatches(loadedMatches);
-    setReviews(loadedReviews);
-    if (loadedMatches.length > 0 && !activeMatchId) {
-      setActiveMatchId(loadedMatches[0].id);
+  // Poll active matches every 4s when viewing Matches tab for real multi-user chat updates
+  useEffect(() => {
+    if (activeTab !== 'matches' || !currentUser) return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const res = await api.getMatches();
+        setMatches(res.matches || []);
+      } catch {
+        // Silent background poll
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [activeTab, currentUser]);
+
+  const requireAuth = (message, onProceed = null) => {
+    if (currentUser) {
+      if (onProceed) onProceed();
+      return true;
+    }
+    setAuthModalState({ open: true, message, onComplete: onProceed });
+    return false;
+  };
+
+  const handleAuthSuccess = async (user) => {
+    const callback = authModalState.onComplete;
+    setCurrentUser(user);
+    await refreshAll();
+    if (callback) callback();
+  };
+
+  const handleSelectUser = async (userId) => {
+    try {
+      const { user } = await api.demoLogin(userId);
+      setCurrentUser(user);
+      setActiveMatchId(null);
+      await refreshAll();
+    } catch (err) {
+      setErrorBanner(err.message);
     }
   };
 
-  const handleSelectUser = (userId) => {
-    StorageService.setCurrentUserId(userId);
-    const updated = users.find(u => u.id === userId);
-    if (updated) {
-      setCurrentUser(updated);
-    }
+  const handleLogout = async () => {
+    await api.logout();
+    setCurrentUser(null);
+    setMatches([]);
+    setSkippedIds([]);
+    setActiveMatchId(null);
+    await refreshAll();
   };
 
-  const handleCreateListing = (listingData) => {
+  const handleCreateListing = async (listingData) => {
     if (!currentUser) return;
-    const newListing = StorageService.addListing(listingData, currentUser);
-    setListings(StorageService.getListings());
+    await api.createListing(listingData);
+    await refreshAll();
   };
 
-  const handleDeleteListing = (listingId) => {
-    const updated = StorageService.deleteListing(listingId);
-    setListings(updated);
+  const handleDeleteListing = async (listingId) => {
+    await api.deleteListing(listingId);
+    await refreshAll();
   };
 
-  const handleMatchCreated = (listing, buyer) => {
-    const newMatch = StorageService.createMatch(listing, buyer);
-    setMatches(StorageService.getMatches());
-    return newMatch;
+  const handleSkipListing = async (listingId) => {
+    setSkippedIds((prev) => (prev.includes(listingId) ? prev : [...prev, listingId]));
+    if (currentUser) {
+      await api.skipListing(listingId);
+    }
+  };
+
+  const handleResetSkips = async () => {
+    setSkippedIds([]);
+    if (currentUser) {
+      await api.resetSkips();
+    }
+  };
+
+  const handleMatchCreated = async (listing) => {
+    if (!requireAuth('Sign in or create a business account to match with suppliers.')) {
+      return null;
+    }
+    const { match } = await api.createMatch(listing.id);
+    await refreshAll();
+    return match;
   };
 
   const handleOpenChatWithMatch = (match) => {
+    if (!match) return;
     setActiveMatchId(match.id);
     setActiveTab('matches');
   };
 
-  const handleSendMessage = (matchId, sender, text) => {
-    StorageService.sendMessage(matchId, sender, text);
-    setMatches(StorageService.getMatches());
+  const handleSendMessage = async (matchId, text) => {
+    await api.sendMessage(matchId, text);
+    const res = await api.getMatches();
+    setMatches(res.matches || []);
   };
 
-  const handleUpdateStatus = (matchId, newStatus, pickupSchedule = null) => {
-    const updated = StorageService.updateMatchStatus(matchId, newStatus, pickupSchedule);
-    setMatches(updated);
+  const handleUpdateStatus = async (matchId, newStatus, pickupSchedule = null) => {
+    await api.updateMatch(matchId, { status: newStatus, pickupSchedule });
+    await refreshAll();
   };
 
-  const handleSubmitReview = (reviewData) => {
-    const updated = StorageService.addReview(reviewData);
-    setReviews(updated);
+  const handleSubmitReview = async (reviewData) => {
+    await api.createReview(reviewData);
+    await refreshAll();
   };
 
-  const handleResetData = () => {
-    StorageService.resetToDefault();
-    loadAllData();
-  };
-
-  if (!currentUser) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600" />
+      <div className="h-dvh flex items-center justify-center bg-[#f8faf7]">
+        <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-emerald-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8faf7] text-slate-900 font-sans">
-      
-      {/* Top App Navbar */}
+    <div className="h-dvh overflow-hidden flex flex-col bg-[#f8faf7] text-slate-900 font-sans">
       <Navbar
         currentUser={currentUser}
         allUsers={users}
         onSelectUser={handleSelectUser}
+        onOpenAuth={() => setAuthModalState({ open: true, message: '' })}
+        onLogout={handleLogout}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenQuickRestaurantModal={() => setIsQuickRestaurantOpen(true)}
-        onOpenIndustrialModal={() => setIsIndustrialOpen(true)}
+        onOpenQuickRestaurantModal={() =>
+          requireAuth('Sign in or create an account to post food waste.', () =>
+            setIsQuickRestaurantOpen(true)
+          )
+        }
+        onOpenIndustrialModal={() =>
+          requireAuth('Sign in or create an account to post an industrial spec.', () =>
+            setIsIndustrialOpen(true)
+          )
+        }
         matches={matches}
-        onResetData={handleResetData}
       />
 
-      {/* Main View Router */}
-      <main className="flex-1 pb-16">
+      {errorBanner && (
+        <div className="bg-rose-50 border-b border-rose-200 px-4 py-1.5 text-xs text-rose-700 text-center shrink-0">
+          {errorBanner}
+        </div>
+      )}
+
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {activeTab === 'swipe' && (
           <SwipeMatchDeck
+            key={currentUser?.id || 'guest'}
             currentUser={currentUser}
             listings={listings}
+            skippedIds={skippedIds}
+            onSkipListing={handleSkipListing}
+            onResetSkips={handleResetSkips}
             onMatchCreated={handleMatchCreated}
             onOpenChatWithMatch={handleOpenChatWithMatch}
-            onOpenQuickRestaurantModal={() => setIsQuickRestaurantOpen(true)}
-            onOpenIndustrialModal={() => setIsIndustrialOpen(true)}
+            onOpenQuickRestaurantModal={() =>
+              requireAuth('Sign in or create an account to post feedstock.', () =>
+                setIsQuickRestaurantOpen(true)
+              )
+            }
           />
         )}
 
@@ -140,8 +246,6 @@ export default function App() {
             onMatchCreated={handleMatchCreated}
             onOpenChatWithMatch={handleOpenChatWithMatch}
             onDeleteListing={handleDeleteListing}
-            onOpenQuickRestaurantModal={() => setIsQuickRestaurantOpen(true)}
-            onOpenIndustrialModal={() => setIsIndustrialOpen(true)}
           />
         )}
 
@@ -154,6 +258,7 @@ export default function App() {
             onSendMessage={handleSendMessage}
             onUpdateStatus={handleUpdateStatus}
             onOpenReviewModal={(m) => setReviewMatchTarget(m)}
+            onOpenAuth={() => setAuthModalState({ open: true, message: 'Sign in to view and message your matches.' })}
           />
         )}
 
@@ -161,35 +266,28 @@ export default function App() {
           <SustainabilityDashboard
             currentUser={currentUser}
             listings={listings}
-            matches={matches}
             reviews={reviews}
+            analytics={analytics}
           />
         )}
 
-        {activeTab === 'map' && (
-          <CircularFlowMap
-            users={users}
-            listings={listings}
-          />
-        )}
+        {activeTab === 'map' && <CircularFlowMap routes={routes} />}
       </main>
 
-      {/* Listing Modals */}
       <QuickRestaurantListingModal
-        currentUser={currentUser}
+        currentUser={currentUser || { companyName: 'Your Business', location: { city: 'San Francisco, CA', lat: 37.7749, lng: -122.4194 } }}
         isOpen={isQuickRestaurantOpen}
         onClose={() => setIsQuickRestaurantOpen(false)}
         onListingCreated={handleCreateListing}
       />
 
       <DetailedIndustrialListingModal
-        currentUser={currentUser}
+        currentUser={currentUser || { companyName: 'Your Business', location: { city: 'Oakland, CA', lat: 37.7725, lng: -122.2144 } }}
         isOpen={isIndustrialOpen}
         onClose={() => setIsIndustrialOpen(false)}
         onListingCreated={handleCreateListing}
       />
 
-      {/* Star Rating & Review Modal */}
       <ReviewModal
         currentUser={currentUser}
         match={reviewMatchTarget}
@@ -198,6 +296,13 @@ export default function App() {
         onSubmitReview={handleSubmitReview}
       />
 
+      <AuthModal
+        isOpen={authModalState.open}
+        onClose={() => setAuthModalState({ open: false, message: '', onComplete: null })}
+        onAuthSuccess={handleAuthSuccess}
+        demoUsers={users}
+        promptMessage={authModalState.message}
+      />
     </div>
   );
 }

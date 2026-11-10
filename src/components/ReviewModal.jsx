@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Star, X, Sparkles, ShieldCheck, Check } from 'lucide-react';
+import { Star, X, Check } from 'lucide-react';
 
 const REVIEW_TAGS = [
   'Pristine Organic Feedstock',
@@ -23,11 +23,10 @@ export default function ReviewModal({
   const [selectedTag, setSelectedTag] = useState(REVIEW_TAGS[0]);
   const [comment, setComment] = useState('Excellent partnership. Stream was segregated exactly to specification with zero contamination.');
 
-  if (!isOpen || !match) return null;
+  if (!isOpen || !match || !currentUser) return null;
 
   const isSeller = match.sellerId === currentUser.id;
   const targetUserId = isSeller ? match.buyerId : match.sellerId;
-  const targetUserName = isSeller ? match.buyerName : match.sellerName;
   const targetCompanyName = isSeller ? match.buyerCompany : match.sellerCompany;
 
   const handleSubmit = (e) => {
@@ -149,7 +148,7 @@ export default function ReviewModal({
               type="submit"
               className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Check className="w-3.5 h-3.5" />
               Publish Verified Review
             </button>
           </div>

@@ -1,17 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  X, 
-  UtensilsCrossed, 
-  Flame, 
-  Leaf, 
-  Clock, 
-  Sparkles, 
-  Check, 
-  Camera, 
-  Info,
-  Calendar,
-  DollarSign
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { X, UtensilsCrossed, Check } from 'lucide-react';
 import { calculateCarbonSavings, calculateMethaneAvoided, normalizeToKg } from '../services/impactCalculator';
 
 const PRESET_ORGANIC_TYPES = [
@@ -45,15 +33,14 @@ const CONTAMINATION_OPTIONS = [
   'Meat/Dairy Free',
   'Packaging Free',
   '100% Compostable',
-  'Non-Oily / Uncooked',
-  'Certified Plant-Based'
+  'Non-Oily / Uncooked'
 ];
 
-export default function QuickRestaurantListingModal({ 
-  currentUser, 
-  isOpen, 
-  onClose, 
-  onListingCreated 
+export default function QuickRestaurantListingModal({
+  currentUser,
+  isOpen,
+  onClose,
+  onListingCreated
 }) {
   const [selectedPreset, setSelectedPreset] = useState(PRESET_ORGANIC_TYPES[0]);
   const [title, setTitle] = useState(PRESET_ORGANIC_TYPES[0].label);
@@ -63,8 +50,9 @@ export default function QuickRestaurantListingModal({
   const [isRecurring, setIsRecurring] = useState(true);
   const [recurrenceSchedule, setRecurrenceSchedule] = useState('Daily after service (9:00 PM)');
   const [selectedFlags, setSelectedFlags] = useState(['Meat/Dairy Free', 'Packaging Free', '100% Compostable']);
-  const [notes, setNotes] = useState('Cleanly separated in food-grade 5-gallon buckets at rear alley loading dock.');
-  const [customPhoto, setCustomPhoto] = useState('');
+  const [notes, setNotes] = useState('Separated in sealed food-grade buckets at rear loading dock.');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
@@ -74,89 +62,86 @@ export default function QuickRestaurantListingModal({
   };
 
   const toggleFlag = (flag) => {
-    if (selectedFlags.includes(flag)) {
-      setSelectedFlags(selectedFlags.filter(f => f !== flag));
-    } else {
-      setSelectedFlags([...selectedFlags, flag]);
-    }
+    setSelectedFlags((prev) =>
+      prev.includes(flag) ? prev.filter((f) => f !== flag) : [...prev, flag]
+    );
   };
 
-  // Live impact calculation
   const weightKg = normalizeToKg(quantity, unit);
   const carbonSavings = calculateCarbonSavings('Organic/Food waste', selectedPreset.tag, weightKg);
   const methaneAvoided = calculateMethaneAvoided('Organic/Food waste', selectedPreset.tag, weightKg);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+    setError('');
 
-    const newListing = {
-      title,
-      category: 'Organic/Food waste',
-      subTag: selectedPreset.tag,
-      quantity: Number(quantity),
-      unit,
-      qualityGrade: 'Grade A - Clean Food Scrap',
-      purityPercentage: 99.0,
-      contaminationFlags: selectedFlags,
-      urgencyLevel: isUrgent ? 'Urgent (24h)' : 'Flexible',
-      urgencyText: isUrgent ? 'Time-sensitive organic pickup within 24 hours' : 'Regular scheduled collection',
-      isRecurring,
-      recurrenceSchedule: isRecurring ? recurrenceSchedule : 'One-time lot',
-      priceType: 'Free',
-      priceValue: 0,
-      location: currentUser.location || {
-        address: 'Downtown Commercial District',
-        city: 'San Francisco, CA',
-        lat: 37.7749,
-        lng: -122.4194
-      },
-      availabilityWindow: 'Daily 4:00 PM - 9:00 PM (Loading dock buzzer #2)',
-      photos: [
-        customPhoto || selectedPreset.defaultPhoto
-      ],
-      description: notes
-    };
-
-    onListingCreated(newListing);
-    onClose();
+    try {
+      await onListingCreated({
+        title,
+        category: 'Organic/Food waste',
+        subTag: selectedPreset.tag,
+        quantity: Number(quantity),
+        unit,
+        qualityGrade: 'Grade A - Clean Food Scrap',
+        purityPercentage: 99.0,
+        contaminationFlags: selectedFlags,
+        urgencyLevel: isUrgent ? 'Urgent (24h)' : 'Flexible',
+        urgencyText: isUrgent ? 'Time-sensitive organic pickup within 24 hours' : 'Regular scheduled collection',
+        isRecurring,
+        recurrenceSchedule: isRecurring ? recurrenceSchedule : 'One-time lot',
+        priceType: 'Free',
+        priceValue: 0,
+        location: currentUser.location || {
+          address: 'Downtown Commercial District',
+          city: 'San Francisco, CA',
+          lat: 37.7749,
+          lng: -122.4194
+        },
+        availabilityWindow: 'Daily 4:00 PM - 9:00 PM',
+        photos: [selectedPreset.defaultPhoto],
+        description: notes
+      });
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Unable to publish listing');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-xl w-full shadow-2xl border border-emerald-100 max-h-[95vh] overflow-y-auto">
-        
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-emerald-50 pb-3 mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl p-5 max-w-lg w-full shadow-xl border border-slate-200">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-              <UtensilsCrossed className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <UtensilsCrossed className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-display">
-                  30-Second Food Waste Fast-List
-                </h2>
-                <span className="text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
-                  Quick Mobile
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Posting from: <strong className="text-slate-700">{currentUser.companyName}</strong></p>
+              <h2 className="text-base font-bold text-slate-900 font-display">
+                Food Waste Listing
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Posting from {currentUser.companyName}
+              </p>
             </div>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          
-          {/* Step 1: Feedstock Presets */}
+        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+          {/* Stream Preset */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-              1. Select Organic Stream Preset
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+              Organic Stream
             </label>
             <div className="grid grid-cols-2 gap-2">
               {PRESET_ORGANIC_TYPES.map((preset) => {
@@ -166,53 +151,53 @@ export default function QuickRestaurantListingModal({
                     key={preset.tag}
                     type="button"
                     onClick={() => handleSelectPreset(preset)}
-                    className={`p-2.5 rounded-xl text-left border transition-all ${
-                      isSelected 
-                        ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20 shadow-sm' 
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/80 text-slate-700'
+                    className={`p-2 rounded-lg text-left border transition-colors ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-950'
+                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                     }`}
                   >
-                    <p className={`font-bold text-xs truncate ${isSelected ? 'text-emerald-950' : 'text-slate-800'}`}>
-                      {preset.label}
-                    </p>
-                    <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{preset.desc}</p>
+                    <p className="font-semibold text-xs truncate">{preset.label}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{preset.desc}</p>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Listing Title */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1">Listing Headline</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-slate-900"
-              required
-            />
-          </div>
-
-          {/* Step 2: Weight & Live Impact Preview */}
-          <div className="bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-200/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-emerald-950 uppercase">
-                2. Estimated Weight per Batch
+          {/* Headline & Weight */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-7">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Listing Title
               </label>
-              <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+
+            <div className="sm:col-span-5">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Weight
+              </label>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min="5"
                   max="10000"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-20 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950 text-center"
+                  className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
+                  required
                 />
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="px-2 py-1 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950"
+                  className="h-9 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="kg">kg</option>
                   <option value="tons">tons</option>
@@ -220,110 +205,50 @@ export default function QuickRestaurantListingModal({
                 </select>
               </div>
             </div>
-
-            <input
-              type="range"
-              min="10"
-              max="2000"
-              step="10"
-              value={unit === 'kg' ? quantity : quantity * 1000}
-              onChange={(e) => {
-                if (unit === 'kg') setQuantity(Number(e.target.value));
-                else if (unit === 'tons') setQuantity(Number(e.target.value) / 1000);
-                else setQuantity(Math.round(Number(e.target.value) * 2.20462));
-              }}
-              className="w-full accent-emerald-600"
-            />
-
-            {/* Live Climate Calculator Pill */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div className="bg-white/90 p-2 rounded-xl border border-emerald-200 text-center">
-                <span className="text-[10px] text-emerald-700 font-bold flex items-center justify-center gap-1">
-                  <Leaf className="w-3 h-3 text-emerald-600" /> CO₂e Avoided
-                </span>
-                <p className="text-sm font-extrabold text-emerald-900 mt-0.5">
-                  {carbonSavings.toLocaleString()} kg
-                </p>
-              </div>
-
-              <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-2 rounded-xl border border-amber-300 text-center">
-                <span className="text-[10px] text-amber-900 font-bold flex items-center justify-center gap-1">
-                  <Flame className="w-3 h-3 text-amber-600 animate-pulse" /> Methane Avoided
-                </span>
-                <p className="text-sm font-extrabold text-amber-950 mt-0.5">
-                  {methaneAvoided} kg CH₄
-                </p>
-              </div>
-            </div>
           </div>
 
-          {/* Step 3: Urgency & Recurrence */}
-          <div className="grid grid-cols-2 gap-3">
-            
-            {/* 24h Urgency Toggle */}
-            <div 
-              onClick={() => setIsUrgent(!isUrgent)}
-              className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                isUrgent 
-                  ? 'border-amber-400 bg-amber-50/80 text-amber-950 ring-1 ring-amber-400/30' 
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-600" /> Urgent (24h)
-                </span>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  isUrgent ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-400'
-                }`}>
-                  {isUrgent ? '✓' : ''}
-                </span>
-              </div>
-              <p className="text-[10px] text-amber-800">Boosts visibility for nearby compost facilities</p>
+          {/* Urgency & Schedule */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsUrgent((prev) => !prev)}
+                className={`flex-1 h-9 px-3 rounded-lg border text-xs font-semibold transition-colors ${
+                  isUrgent
+                    ? 'bg-amber-50 border-amber-300 text-amber-900'
+                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}
+              >
+                {isUrgent ? '✓ Urgent (24h)' : 'Flexible Window'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRecurring((prev) => !prev)}
+                className={`flex-1 h-9 px-3 rounded-lg border text-xs font-semibold transition-colors ${
+                  isRecurring
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}
+              >
+                {isRecurring ? '✓ Recurring' : 'One-time'}
+              </button>
             </div>
 
-            {/* Recurring Schedule Toggle */}
-            <div 
-              onClick={() => setIsRecurring(!isRecurring)}
-              className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                isRecurring 
-                  ? 'border-purple-300 bg-purple-50/80 text-purple-950 ring-1 ring-purple-300/30' 
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-purple-600" /> Recurring Feed
-                </span>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  isRecurring ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-400'
-                }`}>
-                  {isRecurring ? '✓' : ''}
-                </span>
-              </div>
-              <p className="text-[10px] text-purple-800">Continuous scheduled pickup</p>
-            </div>
-
-          </div>
-
-          {/* Recurrence Schedule Detail Input if recurring */}
-          {isRecurring && (
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Recurrence Schedule Details</label>
               <input
                 type="text"
-                value={recurrenceSchedule}
+                disabled={!isRecurring}
+                value={isRecurring ? recurrenceSchedule : 'One-time pickup'}
                 onChange={(e) => setRecurrenceSchedule(e.target.value)}
-                placeholder="e.g. Every Tue, Thu & Sat at 4:00 PM"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900"
+                className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 disabled:opacity-50 text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
               />
             </div>
-          )}
+          </div>
 
-          {/* Step 4: Contamination & Compliance Checklist */}
+          {/* Purity Checklist */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-              3. Purity & Contamination Checklist (Click to toggle)
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Compliance Tags
             </label>
             <div className="flex flex-wrap gap-1.5">
               {CONTAMINATION_OPTIONS.map((flag) => {
@@ -333,52 +258,64 @@ export default function QuickRestaurantListingModal({
                     key={flag}
                     type="button"
                     onClick={() => toggleFlag(flag)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1 ${
-                      isChecked 
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border flex items-center gap-1 transition-colors ${
+                      isChecked
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {isChecked && <Check className="w-3 h-3 text-white" />}
-                    {flag}
+                    {isChecked && <Check className="w-3 h-3" />}
+                    <span>{flag}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Loading Dock / Notes */}
+          {/* Notes */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Pickup Location & Logistics Instructions</label>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Pickup Notes
+            </label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900"
-              placeholder="e.g. Buckets placed at rear service door, buzzer 2."
+              className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
-          {/* Modal Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Publish Organic Feedstock (Free Divert)
-            </button>
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+            <div className="text-[11px] text-slate-500">
+              Est. <strong className="text-emerald-700">{carbonSavings.toLocaleString()} kg CO₂e</strong> •{' '}
+              <strong className="text-amber-800">{methaneAvoided} kg CH₄</strong>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-9 px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors"
+              >
+                {submitting ? 'Publishing...' : 'Publish Listing'}
+              </button>
+            </div>
           </div>
-
         </form>
-
       </div>
     </div>
   );

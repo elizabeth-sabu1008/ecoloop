@@ -1,219 +1,189 @@
 import React, { useState } from 'react';
-import { 
-  MapPin, 
-  Truck, 
-  Sparkles, 
-  Leaf, 
-  Flame, 
-  ArrowRight, 
-  CheckCircle2, 
-  Navigation,
-  Layers,
-  Zap
-} from 'lucide-react';
+import { Truck, Navigation, Layers } from 'lucide-react';
 
-export default function CircularFlowMap({ users, listings }) {
+export default function CircularFlowMap({ routes: apiRoutes = [] }) {
   const [selectedRoute, setSelectedRoute] = useState('route_organic_loop');
 
-  const routes = [
+  const fallbackRoutes = [
     {
       id: 'route_organic_loop',
-      title: 'Optimal Organic Loop (Compost & Biogas Bundle)',
+      title: 'Organic Loop (Compost & Biogas)',
       driver: 'BioLoop Fleet Truck #4',
-      stops: [
-        { name: 'GreenFork Bistro (SF)', action: 'Pickup 340kg Prep Scraps + 160kg Grounds', type: 'generator', co2Saved: '448 kg' },
-        { name: 'FreshCoast Brewery (Berkeley)', action: 'Pickup 2.8 Tons Spent Malt Mash', type: 'generator', co2Saved: '3,100 kg' },
-        { name: 'BioLoop Organics Facility (Brisbane)', action: 'Discharge into Anaerobic Beds', type: 'facility', co2Saved: '3,548 kg' },
-        { name: 'Valley Bloom Nursery (Sonoma)', action: 'Deliver 14 Tons Cured Compost', type: 'farm', co2Saved: '6,720 kg' }
-      ],
+      stops: [],
       efficiencyGainPct: 38,
       logisticsCostSavedDollar: 145,
-      totalEmissionsSavedKg: 13816
-    },
-    {
-      id: 'route_industrial_metal',
-      title: 'Secondary Polymer & Industrial Loop',
-      driver: 'Pacific Logistics Carrier #12',
-      stops: [
-        { name: 'Apex Precision CNC (Oakland)', action: 'Pickup 920kg Clean HDPE Regrind', type: 'generator', co2Saved: '1,978 kg' },
-        { name: 'Pacific Polymer Recyclers (San Leandro)', action: 'Extrude Circular Resin Pellets', type: 'facility', co2Saved: '1,978 kg' }
-      ],
-      efficiencyGainPct: 24,
-      logisticsCostSavedDollar: 85,
-      totalEmissionsSavedKg: 3956
+      totalEmissionsSavedKg: 0
     }
   ];
 
-  const activeRoute = routes.find(r => r.id === selectedRoute) || routes[0];
+  const routes = apiRoutes.length > 0 ? apiRoutes : fallbackRoutes;
+  const activeRoute = routes.find((r) => r.id === selectedRoute) || routes[0];
+  const previewStops = activeRoute.stops.slice(0, 3);
+  const routeChain = activeRoute.stops.map((s) => s.name.split('(')[0].trim()).join(' → ') || 'No active stops';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display">
-            Regional Circular Routes & Collection Bundling
+    <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-3 h-full flex flex-col gap-3 min-h-0 overflow-y-auto lg:overflow-hidden">
+      {/* Compact Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div>
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 font-display">
+            Circular Routes & Collection Bundling
           </h1>
-          <span className="text-xs bg-purple-100 text-purple-800 font-bold px-2.5 py-0.5 rounded-full border border-purple-200">
-            Route Optimizer AI
-          </span>
+          <p className="text-xs text-slate-500">
+            Bundled regional pickups generated from active feedstock listings
+          </p>
         </div>
-        <p className="text-sm text-slate-600 mt-1">
-          Bundles nearby generator pickups into unified collection runs to minimize diesel freight miles and transit costs.
-        </p>
+        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+          {activeRoute.stops.length} Active Stops
+        </span>
       </div>
 
-      {/* Main Grid: Visual Map View + Route Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left 7 Cols: Interactive Node Network Schematic */}
-        <div className="lg:col-span-7 bg-slate-950 text-white rounded-3xl p-6 shadow-xl border border-slate-800 relative overflow-hidden flex flex-col justify-between min-h-[460px]">
-          
-          {/* Top Bar on Map */}
-          <div className="flex items-center justify-between z-10">
+      {/* Main Grid */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left 7 Cols: Dynamic Live Schematic View */}
+        <div className="lg:col-span-7 bg-slate-950 text-white rounded-2xl p-5 border border-slate-800 flex flex-col justify-between min-h-0">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                Bay Area Regional Feedstock Flow
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                {activeRoute.title}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-slate-800/80 px-2.5 py-1 rounded-xl text-xs text-slate-300 border border-slate-700">
+            <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-lg text-xs text-slate-300 border border-slate-800">
               <Layers className="w-3.5 h-3.5 text-emerald-400" />
-              <span>5 Active Nodes</span>
+              <span>{activeRoute.stops.length} Nodes</span>
             </div>
           </div>
 
-          {/* Interactive Visual Network Diagram */}
-          <div className="relative my-8 z-10">
-            <div className="grid grid-cols-3 gap-4">
-              
-              {/* Node 1: GreenFork */}
-              <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/40 shadow-lg text-xs space-y-1">
-                <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-950/60 px-2 py-0.2 rounded border border-amber-500/30">
-                  Restaurant Generator
-                </span>
-                <p className="font-bold text-white text-sm">GreenFork Bistro</p>
-                <p className="text-slate-400 text-[11px]">San Francisco • 500kg/day</p>
+          <div className="my-4 space-y-4">
+            {previewStops.length === 0 ? (
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center text-xs text-slate-400">
+                No active listings found for this loop yet. Post a listing to add a collection stop.
               </div>
-
-              {/* Node 2: BioLoop Composting Central Hub */}
-              <div className="bg-emerald-950/90 p-4 rounded-2xl border-2 border-emerald-400 shadow-xl shadow-emerald-500/10 text-xs space-y-1 col-span-1 ring-4 ring-emerald-500/20">
-                <span className="text-[10px] uppercase font-bold text-emerald-300 bg-emerald-900/80 px-2 py-0.2 rounded">
-                  Central Composting Hub
-                </span>
-                <p className="font-extrabold text-white text-base">BioLoop Organics</p>
-                <p className="text-emerald-200 text-[11px]">Brisbane Facility (Aerobic + Biogas)</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {previewStops.map((stop, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border text-xs space-y-1 ${
+                      stop.type === 'facility'
+                        ? 'bg-emerald-950 border-emerald-500/60'
+                        : 'bg-slate-900 border-slate-800'
+                    }`}
+                  >
+                    <span
+                      className={`text-[10px] uppercase font-bold ${
+                        stop.type === 'facility' ? 'text-emerald-300' : 'text-amber-400'
+                      }`}
+                    >
+                      {stop.type === 'facility' ? 'Processing Hub' : `Stop ${idx + 1}`}
+                    </span>
+                    <p className="font-bold text-white truncate">{stop.name}</p>
+                    <p className="text-slate-300 text-[11px] truncate">{stop.action}</p>
+                  </div>
+                ))}
               </div>
+            )}
 
-              {/* Node 3: Valley Bloom Farm */}
-              <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-sky-500/40 shadow-lg text-xs space-y-1">
-                <span className="text-[10px] uppercase font-bold text-sky-400 bg-sky-950/60 px-2 py-0.2 rounded border border-sky-500/30">
-                  Soil Nutrients Buyer
-                </span>
-                <p className="font-bold text-white text-sm">Valley Bloom Nursery</p>
-                <p className="text-slate-400 text-[11px]">Sonoma • 14 Tons Demand</p>
-              </div>
-
-            </div>
-
-            {/* Connecting Flow Lines Animation */}
-            <div className="my-4 bg-emerald-950/40 p-3 rounded-2xl border border-emerald-800/40 flex items-center justify-between text-xs text-emerald-300">
-              <span className="flex items-center gap-1.5 font-bold">
-                <Truck className="w-4 h-4 text-emerald-400 animate-bounce" />
-                Collection Run: SF &rarr; Berkeley &rarr; Brisbane &rarr; Sonoma
+            <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-300">
+              <span className="flex items-center gap-2 font-semibold truncate max-w-md">
+                <Truck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="truncate">{routeChain}</span>
               </span>
-              <span className="font-extrabold text-white bg-emerald-800 px-2 py-0.5 rounded-md text-[11px]">
-                38% Less Carbon vs Separate Runs
+              <span className="font-semibold text-white bg-emerald-800 px-2 py-0.5 rounded text-[11px] shrink-0">
+                +{activeRoute.efficiencyGainPct}% Route Efficiency
               </span>
             </div>
           </div>
 
-          {/* Bottom Live Telemetry */}
-          <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-slate-800 pt-4 z-10">
+          <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-slate-800 pt-3">
             <div>
-              <p className="text-slate-500 text-[10px] uppercase font-bold">Total Route Distance</p>
-              <p className="font-extrabold text-white text-sm">64.2 km</p>
+              <p className="text-slate-400 text-[10px] uppercase font-semibold">Carrier</p>
+              <p className="font-bold text-white text-xs sm:text-sm mt-0.5 truncate">{activeRoute.driver}</p>
             </div>
             <div>
-              <p className="text-slate-500 text-[10px] uppercase font-bold">Freight Carbon Saved</p>
-              <p className="font-extrabold text-emerald-400 text-sm">13.8 MT CO₂e</p>
+              <p className="text-slate-400 text-[10px] uppercase font-semibold">Carbon Offset</p>
+              <p className="font-bold text-emerald-400 text-sm mt-0.5">
+                {(activeRoute.totalEmissionsSavedKg / 1000).toFixed(1)} MT CO₂e
+              </p>
             </div>
             <div>
-              <p className="text-slate-500 text-[10px] uppercase font-bold">Driver Efficiency</p>
-              <p className="font-extrabold text-amber-300 text-sm">+38% Optimized</p>
+              <p className="text-slate-400 text-[10px] uppercase font-semibold">Freight Saved</p>
+              <p className="font-bold text-amber-300 text-sm mt-0.5">${activeRoute.logisticsCostSavedDollar}</p>
             </div>
           </div>
-
         </div>
 
-        {/* Right 5 Cols: Multi-Stop Collection Run Selector & Stop Schedule */}
-        <div className="lg:col-span-5 space-y-4">
-          
-          {/* Route Selector Cards */}
-          <div className="space-y-2">
+        {/* Right 5 Cols: Route Selector & Stops */}
+        <div className="lg:col-span-5 flex flex-col gap-3 min-h-0">
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 shrink-0">
             {routes.map((route) => (
               <button
                 key={route.id}
+                type="button"
                 onClick={() => setSelectedRoute(route.id)}
-                className={`w-full p-4 rounded-2xl text-left border transition-all ${
-                  selectedRoute === route.id 
-                    ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm' 
+                className={`w-full p-3 rounded-xl text-left border transition-colors ${
+                  selectedRoute === route.id
+                    ? 'bg-emerald-50 border-emerald-500'
                     : 'bg-white border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-slate-900">{route.title}</span>
-                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    +{route.efficiencyGainPct}% Efficiency
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="font-bold text-xs text-slate-900 truncate">{route.title}</span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
+                    +{route.efficiencyGainPct}%
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">{route.driver} • ${route.logisticsCostSavedDollar} Logistics Saved</p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {route.driver} • {route.stops.length} stops
+                </p>
               </button>
             ))}
           </div>
 
-          {/* Stop-by-Stop Itinerary */}
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2">
-              <Navigation className="w-4 h-4 text-emerald-600" />
-              Optimized Stop-by-Stop Run
+          <div className="flex-1 min-h-0 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col gap-3">
+            <h3 className="text-xs font-bold text-slate-900 font-display flex items-center gap-1.5 shrink-0">
+              <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Stop-by-Stop Itinerary</span>
             </h3>
 
-            <div className="space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
               {activeRoute.stops.map((stop, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs relative">
-                  
-                  {/* Step Pin */}
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-extrabold text-[10px] shrink-0 text-white ${
-                    stop.type === 'facility' ? 'bg-emerald-600 ring-4 ring-emerald-100' :
-                    stop.type === 'farm' ? 'bg-sky-600' : 'bg-slate-800'
-                  }`}>
+                <div key={idx} className="flex items-start gap-2.5 text-xs">
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 text-white mt-0.5 ${
+                      stop.type === 'facility'
+                        ? 'bg-emerald-600'
+                        : stop.type === 'farm'
+                        ? 'bg-sky-600'
+                        : 'bg-slate-800'
+                    }`}
+                  >
                     {idx + 1}
                   </div>
 
-                  <div className="min-w-0 flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="font-bold text-slate-900">{stop.name}</p>
-                      <span className="text-[10px] font-semibold text-emerald-700">{stop.co2Saved} saved</span>
+                  <div className="min-w-0 flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900 truncate">{stop.name}</p>
+                      <span className="text-[10px] font-semibold text-emerald-700 shrink-0">
+                        {stop.co2Saved}
+                      </span>
                     </div>
-                    <p className="text-[11px] text-slate-600">{stop.action}</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{stop.action}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 font-semibold flex items-center justify-between">
-              <span>Total Run Diversion Impact:</span>
-              <strong className="text-emerald-800">{activeRoute.totalEmissionsSavedKg.toLocaleString()} kg CO₂e Offset</strong>
+            <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 font-semibold flex items-center justify-between shrink-0">
+              <span>Total CO₂e Offset</span>
+              <strong className="text-emerald-800">
+                {activeRoute.totalEmissionsSavedKg.toLocaleString()} kg
+              </strong>
             </div>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

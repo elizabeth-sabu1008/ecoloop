@@ -1,202 +1,173 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  Factory, 
-  Leaf, 
-  ShieldCheck, 
-  Truck, 
-  Calendar, 
-  DollarSign, 
-  Sparkles, 
-  Layers, 
-  CheckCircle2, 
-  Check
-} from 'lucide-react';
+import { X, Factory, Check } from 'lucide-react';
 import { calculateCarbonSavings, normalizeToKg } from '../services/impactCalculator';
 
-const INDUSTRIAL_SUBTAGS = [
-  'Metal Scraps - Aluminum',
-  'Metal Scraps - Steel/Iron',
-  'Plastics - HDPE Regrind',
-  'Plastics - PET Flakes',
-  'Textile Offcuts - Cotton/Polyester',
-  'Wood / Clean Timber Pallets',
-  'Chemical / Mineral Byproducts',
-  'Certified Organic Compost',
-  'Biochar Enhanced Soil Amendment'
+const MATERIAL_OPTIONS = [
+  { label: 'Aluminum Scraps', subTag: 'Metal Scraps - Aluminum', category: 'Industrial/Manufacturing waste' },
+  { label: 'Steel / Iron Scraps', subTag: 'Metal Scraps - Steel/Iron', category: 'Industrial/Manufacturing waste' },
+  { label: 'HDPE Regrind', subTag: 'Plastics - HDPE Regrind', category: 'Industrial/Manufacturing waste' },
+  { label: 'PET Flakes', subTag: 'Plastics - PET Flakes', category: 'Industrial/Manufacturing waste' },
+  { label: 'Textile Offcuts', subTag: 'Textile Offcuts - Cotton/Polyester', category: 'Industrial/Manufacturing waste' },
+  { label: 'Clean Timber / Pallets', subTag: 'Wood / Clean Timber Pallets', category: 'Industrial/Manufacturing waste' },
+  { label: 'Chemical / Mineral Byproducts', subTag: 'Chemical / Mineral Byproducts', category: 'Industrial/Manufacturing waste' },
+  { label: 'Certified Organic Compost', subTag: 'Certified Organic Compost', category: 'Finished compost/fertilizer/biochar output' },
+  { label: 'Biochar Soil Amendment', subTag: 'Biochar Enhanced Soil Amendment', category: 'Finished compost/fertilizer/biochar output' }
 ];
 
-const QUALITY_PRESETS = [
-  'Mil-Spec Aerospace Certified (99.4% Pure)',
-  'Virgin Industrial Regrind (MFI 0.3)',
-  'OMRI Listed & USCC STA Tested Compost',
-  'Clean Kiln-Dried Biomass (<8% Moisture)',
-  'Commercial Recycled Flakes'
+const QUALITY_GRADES = [
+  { label: 'Grade A (99%+ Pure)', purity: 99.2 },
+  { label: 'Industrial Standard (95%+)', purity: 96.0 },
+  { label: 'Clean Segregated Scrap (90%+)', purity: 92.0 },
+  { label: 'Certified Compost / Biochar', purity: 98.0 }
 ];
 
-export default function DetailedIndustrialListingModal({ 
-  currentUser, 
-  isOpen, 
-  onClose, 
-  onListingCreated 
+const HANDLING_OPTIONS = ['Palletized', 'Gaylord boxed', 'Forklift on site'];
+
+export default function DetailedIndustrialListingModal({
+  currentUser,
+  isOpen,
+  onClose,
+  onListingCreated
 }) {
-  const [category, setCategory] = useState('Industrial/Manufacturing waste');
-  const [subTag, setSubTag] = useState(INDUSTRIAL_SUBTAGS[0]);
-  const [title, setTitle] = useState('Clean Post-Industrial Feedstock Lot');
+  const [selectedMaterial, setSelectedMaterial] = useState(MATERIAL_OPTIONS[0]);
+  const [title, setTitle] = useState('Aluminum Scraps - Segregated Lot');
   const [quantity, setQuantity] = useState(2.5);
   const [unit, setUnit] = useState('tons');
-  const [qualityGrade, setQualityGrade] = useState(QUALITY_PRESETS[0]);
-  const [purityPercentage, setPurityPercentage] = useState(99.2);
   const [priceType, setPriceType] = useState('For Sale');
   const [priceValue, setPriceValue] = useState(650);
-  const [isRecurring, setIsRecurring] = useState(true);
-  const [recurrenceSchedule, setRecurrenceSchedule] = useState('Bi-weekly every 2nd Friday');
-  const [availabilityWindow, setAvailabilityWindow] = useState('Mon-Fri 7:00 AM - 4:00 PM (Loading Bay 2)');
-  const [description, setDescription] = useState('Continuous segregated stream of clean feedstock. Packaged in gaylord boxes on reinforced pallets with mill test certs.');
-  const [dockRequirements, setDockRequirements] = useState(['Forklift on site', 'Gaylord boxed', 'Palletized']);
+  const [frequency, setFrequency] = useState('Bi-weekly');
+  const [selectedGrade, setSelectedGrade] = useState(QUALITY_GRADES[0]);
+  const [handling, setHandling] = useState(['Palletized', 'Forklift on site']);
+  const [notes, setNotes] = useState('Segregated post-industrial material ready for pickup during standard weekday dock hours.');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  // Live Carbon calculation
   const weightKg = normalizeToKg(quantity, unit);
-  const carbonSavings = calculateCarbonSavings(category, subTag, weightKg);
+  const carbonSavings = calculateCarbonSavings(selectedMaterial.category, selectedMaterial.subTag, weightKg);
 
-  const toggleDockReq = (req) => {
-    if (dockRequirements.includes(req)) {
-      setDockRequirements(dockRequirements.filter(r => r !== req));
-    } else {
-      setDockRequirements([...dockRequirements, req]);
+  const toggleHandling = (item) => {
+    setHandling((prev) =>
+      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
+    );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    const isRecurring = frequency !== 'One-time';
+
+    try {
+      await onListingCreated({
+        title,
+        category: selectedMaterial.category,
+        subTag: selectedMaterial.subTag,
+        quantity: Number(quantity),
+        unit,
+        qualityGrade: selectedGrade.label,
+        purityPercentage: selectedGrade.purity,
+        contaminationFlags: handling,
+        urgencyLevel: 'Moderate (3-5 days)',
+        urgencyText: 'Ready for carrier dispatch',
+        isRecurring,
+        recurrenceSchedule: isRecurring ? `${frequency} schedule` : 'One-time lot',
+        priceType,
+        priceValue: priceType === 'Free' ? 0 : Number(priceValue),
+        location: currentUser.location || {
+          address: '4800 Industrial Way',
+          city: 'Oakland, CA',
+          lat: 37.7725,
+          lng: -122.2144
+        },
+        availabilityWindow: 'Mon–Fri 8:00 AM – 4:00 PM',
+        photos: [
+          selectedMaterial.category === 'Finished compost/fertilizer/biochar output'
+            ? 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=600&auto=format&fit=crop&q=80'
+            : 'https://images.unsplash.com/photo-1535813547-99c456a41d4a?w=600&auto=format&fit=crop&q=80'
+        ],
+        description: notes
+      });
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Unable to publish listing');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    const newListing = {
-      title,
-      category,
-      subTag,
-      quantity: Number(quantity),
-      unit,
-      qualityGrade,
-      purityPercentage: Number(purityPercentage),
-      contaminationFlags: [...dockRequirements, 'Lab Spec Certified'],
-      urgencyLevel: 'Moderate (3-5 days)',
-      urgencyText: 'Loading dock ready for freight carrier dispatch',
-      isRecurring,
-      recurrenceSchedule: isRecurring ? recurrenceSchedule : 'One-time lot',
-      priceType,
-      priceValue: priceType === 'Free' ? 0 : Number(priceValue),
-      location: currentUser.location || {
-        address: '4800 Industrial Way',
-        city: 'Oakland, CA',
-        lat: 37.7725,
-        lng: -122.2144
-      },
-      availabilityWindow,
-      photos: [
-        category === 'Finished compost/fertilizer/biochar output'
-          ? 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=600&auto=format&fit=crop&q=80'
-          : 'https://images.unsplash.com/photo-1535813547-99c456a41d4a?w=600&auto=format&fit=crop&q=80'
-      ],
-      description
-    };
-
-    onListingCreated(newListing);
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-2xl w-full shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-        
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl p-5 max-w-lg w-full shadow-xl border border-slate-200">
+        {/* Minimal Header */}
+        <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-bold">
-              <Factory className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+              <Factory className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-display">
-                Industrial Feedstock & Spec Sheet Creator
+              <h2 className="text-base font-bold text-slate-900 font-display">
+                Industrial Spec
               </h2>
-              <p className="text-xs text-slate-500">
-                Detailed quality grades and recurring logistics for secondary manufacturing
+              <p className="text-[11px] text-slate-500">
+                Publish surplus industrial feedstock
               </p>
             </div>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          
-          {/* Category Selector */}
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          {/* Row 1: Material & Volume */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Material Sector</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Material Type
+              </label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900"
-              >
-                <option value="Industrial/Manufacturing waste">Industrial / Manufacturing waste</option>
-                <option value="Finished compost/fertilizer/biochar output">Finished compost / fertilizer / biochar output</option>
-                <option value="Organic/Food waste">Organic / Food waste (Bulk)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Feedstock Sub-Type</label>
-              <select
-                value={subTag}
+                value={selectedMaterial.subTag}
                 onChange={(e) => {
-                  setSubTag(e.target.value);
-                  setTitle(`${e.target.value} - Clean Secondary Feedstock`);
+                  const found = MATERIAL_OPTIONS.find((m) => m.subTag === e.target.value);
+                  if (found) {
+                    setSelectedMaterial(found);
+                    setTitle(`${found.label} - Segregated Lot`);
+                  }
                 }}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900"
+                className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
               >
-                {INDUSTRIAL_SUBTAGS.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
+                {MATERIAL_OPTIONS.map((m) => (
+                  <option key={m.subTag} value={m.subTag}>
+                    {m.label}
+                  </option>
                 ))}
               </select>
             </div>
-          </div>
 
-          {/* Title */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1">Listing Title / Specification Name</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900"
-              required
-            />
-          </div>
-
-          {/* Quantity, Unit & Pricing */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Batch Volume</label>
-              <div className="flex items-center gap-1">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Quantity
+              </label>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   step="0.1"
                   min="0.1"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 text-center"
+                  className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
                   required
                 />
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900"
+                  className="h-9 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="tons">tons</option>
                   <option value="kg">kg</option>
@@ -204,172 +175,162 @@ export default function DetailedIndustrialListingModal({
                 </select>
               </div>
             </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Pricing Model</label>
-              <select
-                value={priceType}
-                onChange={(e) => setPriceType(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-900"
-              >
-                <option value="For Sale">Sale ($ / unit)</option>
-                <option value="Free">Free (Free to take)</option>
-                <option value="Pay to remove">Pay Tipping Fee</option>
-              </select>
-            </div>
-
-            {priceType !== 'Free' && (
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate (${`/${unit}`})</label>
-                <input
-                  type="number"
-                  value={priceValue}
-                  onChange={(e) => setPriceValue(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-emerald-800"
-                />
-              </div>
-            )}
           </div>
 
-          {/* Quality Grade & Purity */}
-          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-slate-800 uppercase flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Purity & Lab Grade Standard
-              </label>
-              <span className="text-xs font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                {purityPercentage}% Purity
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={qualityGrade}
-                onChange={(e) => setQualityGrade(e.target.value)}
-                placeholder="e.g. Mil-Spec 6061-T6, OMRI Organic"
-                className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-900"
-              />
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="80"
-                  max="99.9"
-                  step="0.1"
-                  value={purityPercentage}
-                  onChange={(e) => setPurityPercentage(e.target.value)}
-                  className="w-full accent-emerald-600"
-                />
-              </div>
-            </div>
-
-            {/* EPA WARM Climate Offset Preview */}
-            <div className="bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200 flex items-center justify-between">
-              <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
-                <Leaf className="w-3.5 h-3.5 text-emerald-600" /> Estimated CO₂e Offset:
-              </span>
-              <strong className="text-emerald-950 text-sm">
-                {carbonSavings.toLocaleString()} kg CO₂e
-              </strong>
-            </div>
-          </div>
-
-          {/* Recurrence & Logistics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Recurrence Model</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsRecurring(true)}
-                  className={`flex-1 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    isRecurring ? 'bg-purple-50 text-purple-900 border-purple-300' : 'bg-slate-50 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  Recurring Supply
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsRecurring(false)}
-                  className={`flex-1 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    !isRecurring ? 'bg-purple-50 text-purple-900 border-purple-300' : 'bg-slate-50 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  One-time Batch
-                </button>
-              </div>
-            </div>
-
-            {isRecurring && (
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Schedule Details</label>
-                <input
-                  type="text"
-                  value={recurrenceSchedule}
-                  onChange={(e) => setRecurrenceSchedule(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Loading Dock Requirements */}
+          {/* Row 2: Listing Title */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-              Loading Dock & Packaging Criteria
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Listing Title
             </label>
-            <div className="flex flex-wrap gap-1.5">
-              {['Forklift on site', 'Gaylord boxed', 'Palletized', 'Tipper accessible', 'Flatbed accessible'].map(req => {
-                const isChecked = dockRequirements.includes(req);
-                return (
-                  <button
-                    key={req}
-                    type="button"
-                    onClick={() => toggleDockReq(req)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1 ${
-                      isChecked ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    {isChecked && <Check className="w-3 h-3 text-amber-400" />}
-                    {req}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Full Description */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Technical Spec & Chemistry Notes</label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900"
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
+              required
             />
           </div>
 
-          {/* Modal Action Buttons */}
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-lg shadow-slate-900/20 flex items-center gap-1.5 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Publish Industrial Feedstock Spec
-            </button>
+          {/* Row 3: Pricing & Frequency */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Pricing
+              </label>
+              <select
+                value={priceType}
+                onChange={(e) => setPriceType(e.target.value)}
+                className="w-full h-9 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="For Sale">For Sale</option>
+                <option value="Free">Free Pickup</option>
+                <option value="Pay to remove">Tipping Fee</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Rate (${`/${unit}`})
+              </label>
+              <input
+                type="number"
+                disabled={priceType === 'Free'}
+                value={priceType === 'Free' ? 0 : priceValue}
+                onChange={(e) => setPriceValue(e.target.value)}
+                className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-slate-50 disabled:opacity-50 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Frequency
+              </label>
+              <select
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value)}
+                className="w-full h-9 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="One-time">One-time</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Bi-weekly">Bi-weekly</option>
+                <option value="Monthly">Monthly</option>
+              </select>
+            </div>
           </div>
 
-        </form>
+          {/* Row 4: Quality & Handling */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Quality Grade
+              </label>
+              <select
+                value={selectedGrade.label}
+                onChange={(e) => {
+                  const found = QUALITY_GRADES.find((g) => g.label === e.target.value);
+                  if (found) setSelectedGrade(found);
+                }}
+                className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-500"
+              >
+                {QUALITY_GRADES.map((g) => (
+                  <option key={g.label} value={g.label}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Handling
+              </label>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {HANDLING_OPTIONS.map((opt) => {
+                  const active = handling.includes(opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => toggleHandling(opt)}
+                      className={`h-8 px-2.5 rounded-lg text-[11px] font-medium border flex items-center gap-1 transition-colors ${
+                        active
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {active && <Check className="w-3 h-3" />}
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 5: Minimal Notes */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Specification & Pickup Notes
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Minimal Footer */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-500">
+              Est. offset:{' '}
+              <strong className="text-emerald-700">{carbonSavings.toLocaleString()} kg CO₂e</strong>
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-9 px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="h-9 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold text-xs transition-colors"
+              >
+                {submitting ? 'Publishing...' : 'Publish Listing'}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );
