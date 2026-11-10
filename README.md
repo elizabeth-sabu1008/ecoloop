@@ -5,7 +5,7 @@
 
 
 ## 📁 Folder & File Structure
-
+```
 ecoloop/
 ├── index.html                                 # HTML5 entry with Google Fonts & SEO meta tags
 ├── package.json                               # Dependencies & scripts
