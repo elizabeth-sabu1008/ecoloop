@@ -70,7 +70,7 @@ To test all calculations (Haversine distance, EPA WARM carbon offsets, methane a
 ```bash
 node src/tests/ecoloop.test.js
 ```
-=======
+
 # Ecoloop
 An AI-powered marketplace that matches waste generators with businesses that can reuse their surplus material, cutting landfill, logistics costs, and carbon emissions.
 >>>>>>> 815a1b70ccd34458be93e24662fcb433da979286
